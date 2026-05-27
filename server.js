@@ -69,52 +69,68 @@ input:focus,select:focus{outline:none;border-color:var(--p)!important;box-shadow
 .toast.show{opacity:1}
 </style>`;
 
-// ── PUNCH CARD COMPONENT ──────────────────────────────
+// ── PUNCH CARD COMPONENT (kraft / stamp style) ────────
+const BEAN_SVG = `<svg viewBox="0 0 26 36" width="20" height="28" fill="currentColor"><ellipse cx="13" cy="18" rx="11" ry="16"/><path d="M13 2 Q5 18 13 34" fill="none" stroke="#C4975A" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+const BEANS_HEADER = `<svg viewBox="0 0 74 58" width="58" height="46" fill="#1C0F00" style="flex-shrink:0"><g transform="rotate(-22,20,34)"><ellipse cx="20" cy="34" rx="11" ry="16"/><path d="M20 18Q12 34 20 50" fill="none" stroke="#C4975A" stroke-width="2" stroke-linecap="round"/></g><g transform="rotate(18,50,18)"><ellipse cx="50" cy="18" rx="11" ry="16"/><path d="M50 2Q42 18 50 34" fill="none" stroke="#C4975A" stroke-width="2" stroke-linecap="round"/></g><g transform="rotate(-4,54,44)"><ellipse cx="54" cy="44" rx="10" ry="14"/><path d="M54 30Q47 44 54 58" fill="none" stroke="#C4975A" stroke-width="2" stroke-linecap="round"/></g></svg>`;
+const ORDS = ['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH','9TH','10TH','11TH','12TH','13TH','14TH','15TH','16TH','17TH','18TH','19TH','20TH'];
+
 function punchCardHTML(tpl, punches, ser) {
-  const { cardTitle, description, goal, color, expiry } = tpl;
-  const cols = goal <= 5 ? goal : goal <= 8 ? 4 : 5;
+  const { cardTitle, goal, reward, expiry, businessName } = tpl;
+  const cols    = goal <= 5 ? goal : goal <= 8 ? 4 : 5;
+  const goalOrd = ORDS[goal - 1] || goal + 'TH';
+  const stamps  = goal - 1;
+
   let circles = '';
   for (let i = 0; i < goal; i++) {
-    if (i === goal - 1)   circles += `<div class="circle ${i < punches ? 'gift-filled' : 'gift-empty'}">🎁</div>`;
-    else if (i < punches) circles += `<div class="circle filled">☕</div>`;
-    else                  circles += `<div class="circle empty">${i + 1}</div>`;
+    const isLast    = i === goal - 1;
+    const isStamped = i < punches;
+    if (isLast) {
+      const rw = (reward || 'FREE DRINK').toUpperCase().split(' ');
+      circles += `<div class="kc ${isStamped ? 'kc-on' : 'kc-prize'}">
+        ${isStamped ? BEAN_SVG : `<span class="kc-prize-txt">${rw.join('<br/>')}</span>`}
+      </div>`;
+    } else if (isStamped) {
+      circles += `<div class="kc kc-on kc-pop">${BEAN_SVG}</div>`;
+    } else {
+      circles += `<div class="kc kc-off">${i + 1}</div>`;
+    }
   }
-  const pct       = Math.round((punches / goal) * 100);
-  const expiryFmt = expiry ? expiry.split('-').reverse().join('.') : '—';
+
+  const exFmt = expiry ? expiry.split('-').reverse().join('/') : '';
+
   return `
-<div class="punch-card" style="--c:${color}">
-  <div class="pc-header">
+<div class="kraft-card">
+  <div class="kh">
     <div>
-      <div class="pc-title">${esc(cardTitle)}</div>
-      <div class="pc-desc">${esc(description)}</div>
+      <div class="kh-loyalty">LOYALTY</div>
+      <div class="kh-card">CARD</div>
     </div>
-    <span class="tag" style="background:color-mix(in srgb,${color} 12%,#fff);color:${color}">STAMP CARD</span>
+    ${BEANS_HEADER}
   </div>
-  <div class="pc-grid" style="grid-template-columns:repeat(${cols},1fr)">${circles}</div>
-  <div class="pc-footer">
-    <div><div class="pc-flabel">סטטוס</div><div class="pc-fval">${punches} / ${goal}</div></div>
-    <div class="pc-progress"><div class="pc-bar" style="width:${pct}%;background:${color}"></div></div>
-    <div style="text-align:left"><div class="pc-flabel">תוקף</div><div class="pc-fval">${expiryFmt}</div></div>
-  </div>
-  ${ser ? `<div class="pc-serial">מס׳ ${esc(ser)}</div>` : ''}
+  <div class="k-rule"></div>
+  <div class="k-headline">COLLECT ${stamps} STAMPS — GET THE ${goalOrd} FREE</div>
+  <div class="k-grid" style="grid-template-columns:repeat(${cols},1fr)">${circles}</div>
+  ${ser ? `<div class="k-serial"># ${esc(ser)}</div>` : ''}
+  <div class="k-terms">${exFmt ? `VALID UNTIL ${exFmt} · ` : ''}TERMS &amp; CONDITIONS APPLY</div>
 </div>
 <style>
-.punch-card{background:#fff;border-radius:24px;padding:22px;border:1px solid rgba(0,0,0,.06);box-shadow:0 4px 24px rgba(0,0,0,.1)}
-.pc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;gap:8px}
-.pc-title{font-size:18px;font-weight:900;color:var(--c)}
-.pc-desc{font-size:12px;color:#9ca3af;margin-top:2px;font-weight:500}
-.pc-grid{display:grid;gap:8px;justify-items:center;margin-bottom:16px}
-.circle{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all .3s cubic-bezier(.34,1.56,.64,1)}
-.circle.filled{background:var(--c);box-shadow:0 3px 12px color-mix(in srgb,var(--c) 40%,transparent)}
-.circle.empty{border:2px dashed color-mix(in srgb,var(--c) 30%,transparent);color:color-mix(in srgb,var(--c) 35%,transparent);font-size:11px;font-weight:800}
-.circle.gift-empty{background:color-mix(in srgb,var(--c) 7%,#fff);border:2px solid color-mix(in srgb,var(--c) 20%,transparent)}
-.circle.gift-filled{background:#f59e0b;box-shadow:0 3px 12px rgba(245,158,11,.4)}
-.pc-footer{display:flex;align-items:center;gap:10px;padding-top:14px;border-top:2px dashed #f0f0f8}
-.pc-flabel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin-bottom:2px}
-.pc-fval{font-size:14px;font-weight:900;color:var(--c)}
-.pc-progress{flex:1;height:6px;background:#f0f0f8;border-radius:999px;overflow:hidden}
-.pc-bar{height:100%;border-radius:999px;transition:width .5s ease}
-.pc-serial{margin-top:10px;text-align:center;font-size:11px;font-weight:700;color:#9ca3af;letter-spacing:.05em}
+.kraft-card{background:#C4975A;border-radius:14px;padding:18px 20px 14px;color:#1C0F00;position:relative;overflow:hidden;box-shadow:0 6px 28px rgba(0,0,0,.2)}
+.kraft-card::after{content:'';position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23n)' opacity='.09'/%3E%3C/svg%3E");pointer-events:none;border-radius:14px}
+.kh{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.kh-loyalty{font-size:12px;font-weight:900;letter-spacing:.22em;opacity:.75;font-family:Impact,'Arial Black',sans-serif;text-transform:uppercase}
+.kh-card{font-size:30px;font-weight:900;letter-spacing:.06em;line-height:1;margin-top:-3px;font-family:Impact,'Arial Black',sans-serif}
+.k-rule{height:2.5px;background:#1C0F00;border-radius:2px;opacity:.8;margin-bottom:5px}
+.k-headline{font-size:10px;font-weight:900;letter-spacing:.07em;text-align:center;padding:4px 0 9px;opacity:.8;border-bottom:1.5px solid rgba(28,15,0,.35);margin-bottom:13px;font-family:Impact,'Arial Black',sans-serif}
+.k-grid{display:grid;gap:8px;justify-items:center;margin-bottom:10px}
+.kc{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid #1C0F00}
+.kc-off{background:transparent;color:#1C0F00;font-size:15px;font-weight:900;opacity:.65;font-family:Impact,'Arial Black',sans-serif}
+.kc-on{background:#1C0F00;color:#C4975A;border-color:#1C0F00}
+.kc-pop{animation:kstamp .35s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes kstamp{from{transform:scale(.2) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.kc-prize{border-style:dashed;border-color:rgba(28,15,0,.55);background:transparent}
+.kc-prize-txt{font-size:7px;font-weight:900;text-align:center;line-height:1.35;letter-spacing:.04em;opacity:.75;font-family:Impact,'Arial Black',sans-serif}
+.k-serial{text-align:center;font-size:10px;opacity:.5;font-weight:900;letter-spacing:.12em;margin-bottom:5px;font-family:Impact,'Arial Black',sans-serif}
+.k-terms{font-size:8px;text-align:center;opacity:.45;letter-spacing:.07em;font-weight:700;padding-top:7px;border-top:1px solid rgba(28,15,0,.22);font-family:Impact,'Arial Black',sans-serif}
 </style>`;
 }
 
@@ -244,11 +260,8 @@ tbody td{padding:12px 16px;font-size:13px;vertical-align:middle}
           </div>
         </div>
         <div class="form-group">
-          <label>צבע</label>
-          <div class="color-row">
-            <input id="f-color" type="color" value="${t.color}" oninput="livePreview()"/>
-            <span id="color-val" style="font-size:13px;font-weight:700;color:#6b7280">${t.color}</span>
-          </div>
+          <label>שם ההטבה (פרס)</label>
+          <input id="f-reward" type="text" value="${esc(t.reward)}" oninput="livePreview()"/>
         </div>
         <button onclick="saveTemplate()" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px">
           💾 שמור כרטיסייה
@@ -313,9 +326,9 @@ async function saveTemplate() {
     businessName: document.getElementById('f-biz').value,
     cardTitle:    document.getElementById('f-title').value,
     description:  document.getElementById('f-desc').value,
+    reward:       document.getElementById('f-reward').value,
     goal:         parseInt(document.getElementById('f-goal').value) || 10,
     expiry:       document.getElementById('f-expiry').value,
-    color:        document.getElementById('f-color').value,
   };
   const r = await fetch('/api/template', {
     method: 'POST',
@@ -328,37 +341,22 @@ async function saveTemplate() {
   } else toast('שגיאה בשמירה', false);
 }
 
-function livePreview() {
-  const color  = document.getElementById('f-color').value;
-  const title  = document.getElementById('f-title').value || 'כותרת';
-  const desc   = document.getElementById('f-desc').value || 'תיאור';
-  const goal   = Math.min(20, Math.max(3, parseInt(document.getElementById('f-goal').value)||10));
-  const expiry = document.getElementById('f-expiry').value;
-  document.getElementById('color-val').textContent = color;
-
-  const cols   = goal<=5?goal:goal<=8?4:5;
-  const filled = Math.ceil(goal*.55);
-  let circles  = '';
-  for (let i=0;i<goal;i++) {
-    if (i===goal-1) circles += \`<div class="circle gift-empty">🎁</div>\`;
-    else if (i<filled) circles += \`<div class="circle filled">☕</div>\`;
-    else circles += \`<div class="circle empty">\${i+1}</div>\`;
-  }
-  const pct = Math.round((filled/goal)*100);
-  const ef  = expiry ? expiry.split('-').reverse().join('.') : '—';
-  document.getElementById('card-preview').innerHTML = \`
-<div class="punch-card" style="--c:\${color}">
-  <div class="pc-header">
-    <div><div class="pc-title">\${title}</div><div class="pc-desc">\${desc}</div></div>
-    <span class="tag" style="background:color-mix(in srgb,\${color} 12%,#fff);color:\${color}">STAMP CARD</span>
-  </div>
-  <div class="pc-grid" style="grid-template-columns:repeat(\${cols},1fr)">\${circles}</div>
-  <div class="pc-footer">
-    <div><div class="pc-flabel">סטטוס</div><div class="pc-fval">6 / \${goal}</div></div>
-    <div class="pc-progress"><div class="pc-bar" style="width:\${pct}%;background:\${color}"></div></div>
-    <div style="text-align:left"><div class="pc-flabel">תוקף</div><div class="pc-fval">\${ef}</div></div>
-  </div>
-</div>\`;
+async function livePreview() {
+  const data = {
+    cardTitle:   document.getElementById('f-title').value,
+    description: document.getElementById('f-desc').value,
+    reward:      document.getElementById('f-reward').value,
+    goal:        document.getElementById('f-goal').value,
+    expiry:      document.getElementById('f-expiry').value,
+  };
+  try {
+    const r = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    document.getElementById('card-preview').innerHTML = await r.text();
+  } catch(e) {}
 }
 
 async function resetCustomer(ser) {
@@ -565,6 +563,13 @@ p{font-size:14px;color:#6b7280;line-height:1.6}
 // ══════════════════════════════════════════════════════
 // API ROUTES
 // ══════════════════════════════════════════════════════
+app.post('/api/preview', (req, res) => {
+  const d   = load();
+  const tpl = { ...d.template, ...req.body, goal: Math.min(20, Math.max(3, parseInt(req.body.goal)||10)) };
+  const filled = Math.ceil(tpl.goal * 0.55);
+  res.send(punchCardHTML(tpl, filled, null));
+});
+
 app.post('/api/template', (req, res) => {
   const data = req.body;
   const d    = load();
