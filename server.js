@@ -484,6 +484,12 @@ body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direct
     : `<button class="action-btn waiting" disabled>🎁 מימוש הטבה</button>
        <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:10px">חסרים עוד ${remaining} ניקובים ל${esc(t.reward)}</p>`
   }
+
+  <a href="/wallet/${c.serial}" style="display:flex;justify-content:center;margin-top:14px">
+    <img src="https://pay.google.com/about/static_kv/partner/EN/iwallet_button.png"
+         alt="Add to Google Wallet"
+         style="height:48px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.15)"/>
+  </a>
 </div>
 
 <script>
@@ -616,6 +622,92 @@ app.post('/api/reset/:serial', (req, res) => {
   d.customers[req.params.serial].punches = 0;
   save(d);
   res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════
+// GOOGLE WALLET
+// ══════════════════════════════════════════════════════
+const ISSUER_ID = '3388000000023148997';
+
+function getCreds() {
+  if (process.env.GOOGLE_CREDENTIALS) {
+    try { return JSON.parse(process.env.GOOGLE_CREDENTIALS); } catch {}
+  }
+  try { return require('./credentials.json'); } catch {}
+  return null;
+}
+
+function buildWalletURL(customer, template, B) {
+  const jwt   = require('jsonwebtoken');
+  const creds = getCreds();
+  if (!creds) throw new Error('credentials.json חסר');
+
+  const classId  = `${ISSUER_ID}.loyalty_v1`;
+  const objectId = `${ISSUER_ID}.${customer.serial.replace(/-/g,'_')}`;
+
+  const loyaltyClass = {
+    id: classId,
+    issuerName: template.businessName,
+    programName: template.cardTitle,
+    rewardsTierLabel: 'הטבה',
+    rewardsTier: template.reward,
+    hexBackgroundColor: '#C4975A',
+    countryCode: 'IL',
+    reviewStatus: 'UNDER_REVIEW'
+  };
+
+  const loyaltyObject = {
+    id: objectId,
+    classId,
+    state: 'ACTIVE',
+    accountId: customer.serial,
+    accountName: customer.name,
+    loyaltyPoints: {
+      label: 'ניקובים',
+      balance: { int: customer.punches }
+    },
+    secondaryLoyaltyPoints: {
+      label: 'נותרו',
+      balance: { int: Math.max(0, template.goal - customer.punches) }
+    },
+    barcode: {
+      type: 'QR_CODE',
+      value: `${B}/punch/${customer.serial}`,
+      alternateText: customer.serial
+    },
+    textModulesData: [
+      { id: 'goal',   header: 'מטרה',  body: `${template.goal} ניקובים` },
+      { id: 'reward', header: 'פרס',   body: template.reward },
+      { id: 'left',   header: 'נותרו', body: `${Math.max(0, template.goal - customer.punches)} ניקובים` }
+    ]
+  };
+
+  const token = jwt.sign(
+    {
+      iss: creds.client_email,
+      aud: 'google',
+      typ: 'savetowallet',
+      iat: Math.floor(Date.now() / 1000),
+      origins: [B],
+      payload: { loyaltyClasses: [loyaltyClass], loyaltyObjects: [loyaltyObject] }
+    },
+    creds.private_key,
+    { algorithm: 'RS256' }
+  );
+
+  return `https://pay.google.com/gp/v/save/${token}`;
+}
+
+app.get('/wallet/:serial', (req, res) => {
+  const d = load();
+  const c = d.customers[req.params.serial];
+  if (!c) return res.status(404).send('לקוח לא נמצא');
+  try {
+    res.redirect(buildWalletURL(c, d.template, base(req)));
+  } catch(e) {
+    console.error('Wallet error:', e.message);
+    res.status(500).send('שגיאה: ' + e.message);
+  }
 });
 
 // ══════════════════════════════════════════════════════
