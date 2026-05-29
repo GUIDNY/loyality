@@ -485,11 +485,22 @@ body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direct
        <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:10px">חסרים עוד ${remaining} ניקובים ל${esc(t.reward)}</p>`
   }
 
-  <a href="/wallet/${c.serial}" style="display:flex;justify-content:center;margin-top:14px">
-    <img src="https://pay.google.com/about/static_kv/partner/EN/iwallet_button.png"
-         alt="Add to Google Wallet"
-         style="height:48px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.15)"/>
-  </a>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+    <a href="/wallet/${c.serial}" style="display:flex;justify-content:center">
+      <img src="https://pay.google.com/about/static_kv/partner/EN/iwallet_button.png"
+           alt="Add to Google Wallet"
+           style="height:48px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.12)"/>
+    </a>
+    <a href="/apple-wallet/${c.serial}" style="display:flex;justify-content:center">
+      <img src="https://apple-resources.s3.amazonaws.com/media-services/images/en-us/apple-wallet-badge-sm.png"
+           alt="Add to Apple Wallet"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+           style="height:48px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.12)"/>
+      <div style="display:none;height:48px;background:#000;color:#fff;border-radius:8px;padding:0 20px;align-items:center;gap:8px;font-weight:700;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+        🍎 Add to Apple Wallet
+      </div>
+    </a>
+  </div>
 </div>
 
 <script>
@@ -622,6 +633,143 @@ app.post('/api/reset/:serial', (req, res) => {
   d.customers[req.params.serial].punches = 0;
   save(d);
   res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════
+// APPLE WALLET
+// ══════════════════════════════════════════════════════
+const PASS_TYPE_ID = 'pass.ZX5VG4RDTL.loyalty';
+const TEAM_ID      = 'ZX5VG4RDTL';
+
+// Minimal solid-colour PNG generator (no deps)
+function solidPNG(size, r, g, b) {
+  const zlib  = require('zlib');
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c;
+  }
+  function crc(buf) {
+    let c = 0xFFFFFFFF;
+    for (const b of buf) c = table[(c ^ b) & 0xFF] ^ (c >>> 8);
+    return (~c) >>> 0;
+  }
+  function chunk(type, data) {
+    const t = Buffer.from(type), l = Buffer.allocUnsafe(4), cv = Buffer.allocUnsafe(4);
+    l.writeUInt32BE(data.length);
+    cv.writeUInt32BE(crc(Buffer.concat([t, data])));
+    return Buffer.concat([l, t, data, cv]);
+  }
+  const raw = Buffer.allocUnsafe(size * (3 * size + 1));
+  for (let y = 0; y < size; y++) {
+    raw[y * (3 * size + 1)] = 0;
+    for (let x = 0; x < size; x++) {
+      const i = y * (3 * size + 1) + 1 + x * 3;
+      raw[i] = r; raw[i+1] = g; raw[i+2] = b;
+    }
+  }
+  const ihdr = Buffer.allocUnsafe(13);
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr[8]=8; ihdr[9]=2; ihdr[10]=ihdr[11]=ihdr[12]=0;
+  return Buffer.concat([
+    Buffer.from([137,80,78,71,13,10,26,10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+async function buildApplePass(customer, template, B) {
+  const { PKPass } = require('passkit-generator');
+  const os         = require('os');
+
+  const passJson = {
+    formatVersion:      1,
+    passTypeIdentifier: PASS_TYPE_ID,
+    teamIdentifier:     TEAM_ID,
+    serialNumber:       customer.serial,
+    organizationName:   template.businessName,
+    description:        template.cardTitle,
+    backgroundColor:    'rgb(196,151,90)',
+    foregroundColor:    'rgb(28,15,0)',
+    labelColor:         'rgb(80,40,0)',
+    storeCard: {
+      primaryFields: [{
+        key: 'stamps', label: 'STAMPS',
+        value: `${customer.punches} / ${template.goal}`
+      }],
+      secondaryFields: [{
+        key: 'reward', label: 'REWARD', value: template.reward
+      },{
+        key: 'left', label: 'REMAINING',
+        value: `${Math.max(0, template.goal - customer.punches)} more`
+      }],
+      backFields: [{
+        key: 'serial', label: 'Card Number', value: customer.serial
+      },{
+        key: 'terms', label: 'Terms', value: 'Terms and conditions apply.'
+      }]
+    },
+    barcodes: [{
+      message:         `${B}/punch/${customer.serial}`,
+      format:          'PKBarcodeFormatQR',
+      messageEncoding: 'iso-8859-1',
+      altText:         customer.serial
+    }],
+    barcode: {
+      message:         `${B}/punch/${customer.serial}`,
+      format:          'PKBarcodeFormatQR',
+      messageEncoding: 'iso-8859-1',
+      altText:         customer.serial
+    }
+  };
+
+  // Write model to a temp folder (passkit-generator requires folder path)
+  const tmpDir = path.join(os.tmpdir(), 'pkpass_' + Date.now() + '.pass');
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  const icon = solidPNG(29, 196, 151, 90);
+  const logo = solidPNG(58, 196, 151, 90);
+
+  fs.writeFileSync(path.join(tmpDir, 'pass.json'),   JSON.stringify(passJson));
+  fs.writeFileSync(path.join(tmpDir, 'icon.png'),    icon);
+  fs.writeFileSync(path.join(tmpDir, 'icon@2x.png'), solidPNG(58, 196, 151, 90));
+  fs.writeFileSync(path.join(tmpDir, 'logo.png'),    logo);
+  fs.writeFileSync(path.join(tmpDir, 'logo@2x.png'), logo);
+
+  try {
+    const pass = await PKPass.from({
+      model: tmpDir,
+      certificates: {
+        wwdr:       fs.readFileSync(path.join(__dirname, 'wwdr.pem')),
+        signerCert: fs.readFileSync(path.join(__dirname, 'pass.pem')),
+        signerKey:  fs.readFileSync(path.join(__dirname, 'pass.key')),
+      }
+    });
+    return pass.getAsBuffer();
+  } finally {
+    // Cleanup temp folder
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+app.get('/apple-wallet/:serial', async (req, res) => {
+  const d = load();
+  const c = d.customers[req.params.serial];
+  if (!c) return res.status(404).send('לקוח לא נמצא');
+  try {
+    const buf = await buildApplePass(c, d.template, base(req));
+    res.set({
+      'Content-Type':        'application/vnd.apple.pkpass',
+      'Content-Disposition': `attachment; filename="${c.serial}.pkpass"`,
+      'Content-Length':      buf.length
+    });
+    res.send(buf);
+  } catch(e) {
+    console.error('Apple Wallet error:', e.message);
+    res.status(500).send('שגיאה: ' + e.message);
+  }
 });
 
 // ══════════════════════════════════════════════════════
