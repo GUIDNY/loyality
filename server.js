@@ -742,9 +742,15 @@ async function buildApplePass(customer, template, B) {
     const pass = await PKPass.from({
       model: tmpDir,
       certificates: {
-        wwdr:       fs.readFileSync(path.join(__dirname, 'wwdr.pem')),
-        signerCert: fs.readFileSync(path.join(__dirname, 'pass.pem')),
-        signerKey:  fs.readFileSync(path.join(__dirname, 'pass.key')),
+        wwdr:       process.env.APPLE_WWDR
+                      ? Buffer.from(process.env.APPLE_WWDR, 'base64')
+                      : fs.readFileSync(path.join(__dirname, 'wwdr.pem')),
+        signerCert: process.env.APPLE_PASS_CERT
+                      ? Buffer.from(process.env.APPLE_PASS_CERT, 'base64')
+                      : fs.readFileSync(path.join(__dirname, 'pass.pem')),
+        signerKey:  process.env.APPLE_PASS_KEY
+                      ? Buffer.from(process.env.APPLE_PASS_KEY, 'base64')
+                      : fs.readFileSync(path.join(__dirname, 'pass.key')),
       }
     });
     return pass.getAsBuffer();
