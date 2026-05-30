@@ -255,7 +255,7 @@ app.get('/logout', (req, res) => {
 // ══════════════════════════════════════════════════════
 // ADMIN PAGE
 // ══════════════════════════════════════════════════════
-app.get('/' (req, res) => {
+app.get('/', async (req, res) => {
   const d  = await loadData();
   const t  = d.template;
   const B  = base(req);
