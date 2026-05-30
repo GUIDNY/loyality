@@ -73,8 +73,7 @@ function isAdmin(req) {
   return req.cookies?.at === VALID_TOKEN;
 }
 function requireAdmin(req, res, next) {
-  if (isAdmin(req)) return next();
-  res.redirect('/login?next=' + encodeURIComponent(req.path));
+  next(); // open access
 }
 
 // ══════════════════════════════════════════════════════
@@ -256,7 +255,7 @@ app.get('/logout', (req, res) => {
 // ══════════════════════════════════════════════════════
 // ADMIN PAGE
 // ══════════════════════════════════════════════════════
-app.get('/', requireAdmin, async (req, res) => {
+app.get('/' (req, res) => {
   const d  = await loadData();
   const t  = d.template;
   const B  = base(req);
