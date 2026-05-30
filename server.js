@@ -21,8 +21,14 @@ const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 // PERSISTENT STORAGE  (Vercel KV → /tmp → local file)
 // ══════════════════════════════════════════════════════
 let kv = null;
-if (process.env.KV_REST_API_URL) {
-  try { kv = require('@vercel/kv').kv; } catch {}
+if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  try {
+    const { Redis } = require('@upstash/redis');
+    kv = new Redis({
+      url:   process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+  } catch(e) { console.error('Redis init error:', e.message); }
 }
 
 function defaultData() {
