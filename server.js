@@ -93,10 +93,20 @@ function checkRate(serial) {
 }
 
 // ══════════════════════════════════════════════════════
+// SERVER-SIDE QR CODE GENERATOR
+// ══════════════════════════════════════════════════════
+async function makeQR(text, size = 200) {
+  const QRCode = require('qrcode');
+  return QRCode.toDataURL(text, {
+    width: size, margin: 2,
+    color: { dark: '#1a202c', light: '#ffffff' }
+  });
+}
+
+// ══════════════════════════════════════════════════════
 // SHARED STYLES
 // ══════════════════════════════════════════════════════
 const FONTS = `<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>`;
-const QR_JS = `<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>`;
 const BASE_CSS = `<style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Heebo',system-ui,sans-serif}
 :root{--p:#6B46C1;--pl:#9F7AEA;--bg:#f5f4ff}
@@ -191,12 +201,9 @@ app.get('/', (req, res) => {
 <title>PunchCard — כרטיסיית ניקוב דיגיטלית</title>
 ${FONTS}${BASE_CSS}
 <style>
-/* NAV */
-nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.85);backdrop-filter:blur(16px);border-bottom:1px solid rgba(107,70,193,.1)}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.88);backdrop-filter:blur(16px);border-bottom:1px solid rgba(107,70,193,.1)}
 .nav-logo{font-size:20px;font-weight:900;color:var(--p);display:flex;align-items:center;gap:8px;text-decoration:none}
 .nav-links{display:flex;align-items:center;gap:10px}
-
-/* HERO */
 .hero{min-height:100dvh;display:flex;align-items:center;padding:100px 32px 60px;background:linear-gradient(135deg,#faf8ff 0%,#f0ecff 50%,#e8e3ff 100%);position:relative;overflow:hidden}
 .hero::before{content:'';position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(107,70,193,.12),transparent 70%);border-radius:50%}
 .hero-inner{max-width:1100px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
@@ -206,8 +213,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:fl
 .hero h1 span{color:var(--p)}
 .hero p{font-size:17px;color:#4a5568;line-height:1.7;margin-bottom:32px;font-weight:400}
 .hero-cta{display:flex;gap:12px;flex-wrap:wrap}
-
-/* FEATURES */
 .features{padding:96px 32px;background:#fff}
 .features-inner{max-width:1100px;margin:0 auto}
 .section-label{text-align:center;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--p);margin-bottom:12px}
@@ -218,8 +223,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:fl
 .feat-icon{font-size:36px;margin-bottom:14px}
 .feat h3{font-size:18px;font-weight:800;color:#1a202c;margin-bottom:8px}
 .feat p{font-size:14px;color:#4a5568;line-height:1.6}
-
-/* HOW IT WORKS */
 .how{padding:96px 32px;background:linear-gradient(135deg,#faf8ff,#f0ecff)}
 .how-inner{max-width:800px;margin:0 auto}
 .steps{display:flex;flex-direction:column;gap:24px;margin-top:48px}
@@ -227,13 +230,9 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:fl
 .step-num{width:44px;height:44px;background:var(--p);color:#fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;flex-shrink:0}
 .step h3{font-size:17px;font-weight:800;margin-bottom:4px}
 .step p{font-size:13px;color:#4a5568;line-height:1.5}
-
-/* CTA SECTION */
 .cta-sec{padding:96px 32px;background:linear-gradient(135deg,#5B21B6,#7C3AED);text-align:center;color:#fff}
 .cta-sec h2{font-size:clamp(24px,4vw,40px);font-weight:900;margin-bottom:16px}
 .cta-sec p{font-size:16px;opacity:.8;margin-bottom:36px}
-
-/* FOOTER */
 footer{background:#1a202c;color:#9ca3af;padding:32px;text-align:center;font-size:13px}
 footer span{color:var(--pl)}
 </style>
@@ -244,11 +243,10 @@ footer span{color:var(--pl)}
   <a href="/" class="nav-logo">☕ PunchCard</a>
   <div class="nav-links">
     <a href="/login" class="btn btn-w btn-sm">כניסה</a>
-    <a href="/signup" class="btn btn-p btn-sm">הצטרף בחינם</a>
+    <a href="/signup" class="btn btn-p btn-sm">התחל בחינם</a>
   </div>
 </nav>
 
-<!-- HERO -->
 <section class="hero">
   <div class="hero-inner">
     <div class="hero-text">
@@ -266,7 +264,6 @@ footer span{color:var(--pl)}
   </div>
 </section>
 
-<!-- FEATURES -->
 <section class="features">
   <div class="features-inner">
     <div class="section-label">למה PunchCard?</div>
@@ -291,7 +288,6 @@ footer span{color:var(--pl)}
   </div>
 </section>
 
-<!-- HOW IT WORKS -->
 <section class="how">
   <div class="how-inner">
     <div class="section-label">איך זה עובד</div>
@@ -322,7 +318,6 @@ footer span{color:var(--pl)}
   </div>
 </section>
 
-<!-- CTA -->
 <section class="cta-sec">
   <h2>מוכן להתחיל?</h2>
   <p>הצטרף לאלפי עסקים שכבר משתמשים ב-PunchCard</p>
@@ -398,7 +393,6 @@ app.get('/logout', (req, res) => {
 
 function authPage(mode) {
   const isLogin = mode === 'login';
-  const urlParams = ''; // for error
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
@@ -412,7 +406,6 @@ body{background:linear-gradient(135deg,#5B21B6,#4338CA);display:flex;align-items
 h1{text-align:center;font-size:22px;font-weight:900;margin-bottom:4px}
 .sub{text-align:center;font-size:13px;color:#9ca3af;margin-bottom:24px}
 .err{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center}
-.divider{text-align:center;font-size:12px;color:#9ca3af;margin:16px 0}
 .switch{text-align:center;font-size:13px;color:#6b7280;margin-top:18px}
 .switch a{color:var(--p);font-weight:700;text-decoration:none}
 </style>
@@ -445,6 +438,8 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
   const customers = Object.values(db.customers || {}).filter(c => c.bizId === bizId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  const joinQR = await makeQR(`${B}/join/${bizId}`, 140);
+
   const custRows = customers.length === 0
     ? `<tr><td colspan="5" style="text-align:center;padding:40px;color:#9ca3af;font-size:14px">אין לקוחות עדיין — שתף את ה-QR ←</td></tr>`
     : customers.map(c => {
@@ -473,7 +468,7 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
 <head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${esc(biz.name)} — PunchCard</title>
-${FONTS}${QR_JS}${BASE_CSS}
+${FONTS}${BASE_CSS}
 <style>
 .topbar{background:linear-gradient(135deg,#5B21B6,#7C3AED);color:#fff;padding:0 28px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar .logo{font-size:18px;font-weight:900;display:flex;align-items:center;gap:8px}
@@ -485,7 +480,7 @@ ${FONTS}${QR_JS}${BASE_CSS}
 .preview-wrap{background:#f8f6ff;border-radius:16px;padding:18px;border:2px dashed rgba(107,70,193,.2)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .qr-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;background:#f8f6ff;border-radius:16px;padding:18px;border:1px solid rgba(107,70,193,.12);text-align:center}
-.qr-box{padding:10px;background:#fff;border-radius:12px;border:1px solid #e5e7eb}
+.qr-box{padding:10px;background:#fff;border-radius:12px;border:1px solid #e5e7eb;display:inline-block}
 .qr-label{font-size:12px;font-weight:700;color:#6b7280;line-height:1.5}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
 .stat{background:#fff;border-radius:16px;padding:16px;text-align:center;border:1px solid rgba(107,70,193,.08);box-shadow:0 2px 12px rgba(107,70,193,.06)}
@@ -528,7 +523,6 @@ video{width:100%;height:100%;object-fit:cover;display:block}
 
 <div class="container">
 
-  <!-- Stats -->
   <div class="stats">
     <div class="stat"><div class="stat-val">${customers.length}</div><div class="stat-lbl">לקוחות</div></div>
     <div class="stat"><div class="stat-val" style="color:#22c55e">${customers.filter(c => c.punches >= t.goal).length}</div><div class="stat-lbl">כרטיסים מלאים</div></div>
@@ -560,7 +554,9 @@ video{width:100%;height:100%;object-fit:cover;display:block}
     <div>
       <p class="sec-title">📲 QR להצטרפות לקוחות</p>
       <div class="qr-wrap" style="margin-bottom:20px">
-        <div class="qr-box"><div id="join-qr"></div></div>
+        <div class="qr-box">
+          <img src="${joinQR}" width="140" height="140" style="display:block" alt="Join QR"/>
+        </div>
         <p class="qr-label">לקוח סורק ← ממלא שם ← מקבל כרטיס אישי</p>
         <p style="font-size:11px;color:#9ca3af;font-family:monospace;direction:ltr;word-break:break-all">${B}/join/${bizId}</p>
       </div>
@@ -583,14 +579,12 @@ video{width:100%;height:100%;object-fit:cover;display:block}
   </div>
 </div>
 
-<!-- Scan Button -->
 <button class="scan-btn" onclick="openScanner()">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
   סרוק ניקוב
 </button>
 
-<!-- Scanner Modal -->
-<div class="scan-modal" id="scan-modal" onclick="e => {if(e.target===this)closeScanner()}">
+<div class="scan-modal" id="scan-modal">
   <div class="scan-box">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="font-size:17px;font-weight:900">סרוק ברקוד לקוח</h3>
@@ -612,16 +606,6 @@ video{width:100%;height:100%;object-fit:cover;display:block}
 <div class="toast" id="toast"></div>
 
 <script>
-const BIZ_ID = '${bizId}';
-
-// QR code
-new QRCode(document.getElementById('join-qr'), {
-  text: '${B}/join/${bizId}',
-  width: 140, height: 140,
-  colorDark: '#6B46C1', colorLight: '#ffffff',
-  correctLevel: QRCode.CorrectLevel.M
-});
-
 function toast(msg, ok=true){
   const el=document.getElementById('toast');
   el.textContent=msg; el.style.background=ok?'#1a202c':'#dc2626';
@@ -670,7 +654,6 @@ function filterTable(q){
   });
 }
 
-// Scanner
 let scanStream=null, scanInterval=null;
 function openScanner(){ document.getElementById('scan-modal').classList.add('open'); startScan(); }
 function closeScanner(){
@@ -699,7 +682,7 @@ async function startScan(){
 }
 let lastScanned='';
 async function handleScan(data){
-  const m=data.match(/\/punch\/([^/?&]+)/)||data.match(/\/card\/([^/?&]+)/);
+  const m=data.match(/\/card\/([^/?&]+)/);
   if(!m) return;
   const serial=m[1];
   if(serial===lastScanned) return;
@@ -801,18 +784,20 @@ app.get('/card/:serial', async (req, res) => {
   const db = await loadDB();
   const c  = db.customers?.[req.params.serial];
   if (!c) return res.status(404).send(notFound());
-  const biz = db.businesses[c.bizId];
+  const biz = c.bizId ? db.businesses[c.bizId] : null;
   if (!biz) return res.status(404).send(notFound());
-  const t   = biz.cardTemplate;
-  const B   = base(req);
+  const t    = biz.cardTemplate;
+  const B    = base(req);
   const full = c.punches >= t.goal;
+
+  const cardQR = await makeQR(`${B}/card/${c.serial}`, 160);
 
   res.send(`<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>הכרטיס של ${esc(c.name)}</title>
-${FONTS}${QR_JS}${BASE_CSS}
+${FONTS}${BASE_CSS}
 <style>
 body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direction:column;min-height:100dvh}
 .top{padding:28px 20px 10px;color:#fff;display:flex;justify-content:space-between;align-items:center}
@@ -820,7 +805,6 @@ body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direct
 @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .handle{width:36px;height:4px;background:#d1d5db;border-radius:999px;margin:10px auto 16px}
 .qr-sec{background:#fff;border-radius:20px;border:1px solid #e5e7eb;padding:18px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-.qr-box{display:inline-block;padding:10px;background:#fff;border-radius:12px;border:1.5px solid #e5e7eb}
 .ab{display:block;width:100%;padding:14px;border-radius:16px;font-size:16px;font-weight:900;text-align:center;border:none;cursor:pointer;transition:all .15s}
 .ab:active{transform:scale(.97)}
 .ab-ready{background:#22c55e;color:#fff;box-shadow:0 8px 24px rgba(34,197,94,.3)}
@@ -845,7 +829,7 @@ body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direct
   <div class="qr-sec">
     <div style="font-size:14px;font-weight:800;color:#374151;margin-bottom:4px">הברקוד שלי</div>
     <div style="font-size:11px;color:#9ca3af;margin-bottom:12px">הצג לפקיד בכל קנייה לצבירת ניקוב</div>
-    <div class="qr-box"><div id="my-qr"></div></div>
+    <img src="${cardQR}" width="160" height="160" style="display:block;margin:0 auto;border-radius:10px" alt="Card QR"/>
     <div style="margin-top:10px;font-size:11px;font-weight:700;color:#9ca3af">${esc(c.serial)}</div>
   </div>
   <div style="height:14px"></div>
@@ -871,10 +855,6 @@ body{background:linear-gradient(160deg,#5B21B6,#4338CA);display:flex;flex-direct
 </div>
 
 <script>
-new QRCode(document.getElementById('my-qr'),{
-  text:'${B}/card/${c.serial}',width:150,height:150,
-  colorDark:'#6B46C1',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
-});
 let last=${c.punches};
 setInterval(async()=>{
   try{const r=await fetch('/api/card-state/${c.serial}');const d=await r.json();if(d.punches!==last){location.reload();}}
@@ -885,7 +865,7 @@ setInterval(async()=>{
 });
 
 // ══════════════════════════════════════════════════════
-// PUNCH  (scanned from customer card QR)
+// PUNCH (scanned from customer card QR)
 // ══════════════════════════════════════════════════════
 app.get('/punch/:serial', async (req, res) => {
   const db = await loadDB();
@@ -925,7 +905,7 @@ app.post('/api/template', authMiddleware, async (req, res) => {
   Object.assign(db.businesses[bizId].cardTemplate, {
     businessName: sanitize(data.businessName || biz.cardTemplate.businessName),
     cardTitle:    sanitize(data.cardTitle    || biz.cardTemplate.cardTitle),
-    description:  sanitize(data.description || biz.cardTemplate.description),
+    description:  sanitize(data.description  || biz.cardTemplate.description),
     reward:       sanitize(data.reward       || biz.cardTemplate.reward),
     goal:         Math.min(20, Math.max(3, parseInt(data.goal)||10)),
     expiry:       sanitize(data.expiry || biz.cardTemplate.expiry || '', 20),
