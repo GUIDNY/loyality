@@ -4,15 +4,15 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node test/e2e.js"
   },
   "dependencies": {
-    "@upstash/redis": "^1.38.0",
-    "@vercel/kv": "^3.0.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.3",
     "passkit-generator": "^3.5.7",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "pg": "^8.13.1"
   }
 }

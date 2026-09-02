@@ -1,4 +1,14 @@
 data.json
 node_modules/
 .DS_Store
-node_modules/
+credentials.json
+.env
+.vercel
+.env*.local
+pass.key
+pass.pem
+pass.cer
+pass.csr
+wwdr.cer
+wwdr.pem
+.env.production
