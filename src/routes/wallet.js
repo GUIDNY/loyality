@@ -49,6 +49,53 @@ router.get('/apple-wallet/:serial', async (req, res, next) => {
   }
 });
 
+// ── one-tap NFC join ──────────────────────────────────
+// An NFC tag holding this URL takes the customer straight to the Wallet "Add"
+// sheet: we mint the customer and answer with the pass itself, so there is no
+// web page in between. iOS opens .pkpass responses in Wallet directly; Android
+// gets the Google Wallet save link; anything else falls back to the card page.
+//
+// (The OS still asks the customer to confirm the add — Apple gives no way to
+// install a pass silently, and that confirmation is the only tap left.)
+router.get('/nfc/:bizId', async (req, res, next) => {
+  try {
+    const biz = await db.getBusiness(req.params.bizId);
+    if (!biz) return res.status(404).send(notFound());
+
+    const ua      = String(req.headers['user-agent'] || '');
+    const isApple = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && !/Android/i.test(ua));
+    const t       = biz.cardTemplate || {};
+    const B       = base(req);
+
+    const c = await db.createCustomer(biz.id);
+
+    if (isApple) {
+      try {
+        c.passToken = await db.ensurePassToken(c.serial, crypto.randomBytes(16).toString('hex'));
+        const buf = await generatePkpass(c, t, biz, B);
+        res.set({
+          'Content-Type': 'application/vnd.apple.pkpass',
+          'Content-Disposition': `attachment; filename="${c.serial}.pkpass"`,
+          'Content-Length': buf.length,
+          'Cache-Control': 'no-store',
+        });
+        return res.send(buf);
+      } catch (e) {
+        // Never strand the customer on an error page — the card still works.
+        console.error('[nfc] pkpass build failed:', e.message);
+        return res.redirect(`/card/${c.serial}`);
+      }
+    }
+
+    if (/Android/i.test(ua)) {
+      const url = googleSaveUrl(c, biz, t, B);
+      if (url) return res.redirect(url);
+    }
+
+    res.redirect(`/card/${c.serial}`);
+  } catch (e) { next(e); }
+});
+
 // ── PassKit web service ───────────────────────────────
 // Device registers for updates to one pass.
 router.post('/passkit/v1/devices/:deviceId/registrations/:passTypeId/:serial', async (req, res, next) => {
