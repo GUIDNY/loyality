@@ -39,6 +39,7 @@ function toBusiness(r) {
     passwordHash: r.password_hash,
     cardTemplate: r.card_template || {},
     logo: r.logo || null,
+    isAdmin: r.is_admin === true,
     createdAt: r.created_at,
   };
 }

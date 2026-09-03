@@ -160,6 +160,7 @@ video{width:100%;height:100%;object-fit:cover;display:block}
   </a>
   <div style="display:flex;align-items:center;gap:12px">
     <span class="tag" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text-2)">${customers.length} לקוחות</span>
+    ${biz.isAdmin ? `<a href="/admin" class="btn btn-secondary btn-sm">ניהול</a>` : ''}
     <a href="/" class="btn btn-ghost btn-sm">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       בית

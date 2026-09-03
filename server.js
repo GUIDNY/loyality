@@ -30,6 +30,7 @@ app.set('trust proxy', 1);
 app.use(require('./src/routes/public'));
 app.use(require('./src/routes/business'));
 app.use(require('./src/routes/wallet'));
+app.use(require('./src/routes/admin'));
 
 app.use((req, res) => res.status(404).send(notFound()));
 
