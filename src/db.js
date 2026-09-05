@@ -39,7 +39,10 @@ function toBusiness(r) {
     passwordHash: r.password_hash,
     cardTemplate: r.card_template || {},
     logo: r.logo || null,
-    isAdmin: r.is_admin === true,
+    role: r.role || 'client',
+    isOwner: r.role === 'owner',
+    // "staff" = anyone allowed into the owner area at all
+    isStaff: r.role === 'owner' || r.role === 'admin',
     createdAt: r.created_at,
   };
 }

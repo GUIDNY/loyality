@@ -34,7 +34,19 @@ function empty(msg) {
   return `<tr><td colspan="9" style="text-align:center;padding:36px 20px;color:var(--text-2);font-size:13px">${esc(msg)}</td></tr>`;
 }
 
-function adminPage({ admin, stats, clients, tasks, finance, unlinked, tab = 'clients' }) {
+const ROLE_LABEL = { owner: 'מנהל על', admin: 'מנהל', client: 'לקוח' };
+const ROLE_STYLE = {
+  owner:  'background:#111;border:1px solid #111;color:#fff',
+  admin:  'background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca',
+  client: 'background:var(--bg-2);border:1px solid var(--border);color:var(--text-2)',
+};
+
+function roleTag(r) {
+  return `<span class="tag" style="${ROLE_STYLE[r] || ROLE_STYLE.client}">${ROLE_LABEL[r] || r}</span>`;
+}
+
+function adminPage({ admin, stats, clients, tasks, finance, unlinked, accounts = [], tab = 'clients', notice = '' }) {
+  const isOwner = admin.isOwner === true;
   const net = Number(stats.income) - Number(stats.expense);
   const netMonth = Number(stats.income_month) - Number(stats.expense_month);
 
@@ -164,10 +176,11 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
 
 <div class="topbar">
   <a href="/dashboard" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
-    ${LOGO_ICON}<span class="admin-chip">ניהול</span>
+    ${LOGO_ICON}<span class="admin-chip">${isOwner ? 'ניהול על' : 'ניהול'}</span>
   </a>
   <div style="display:flex;align-items:center;gap:10px">
     <span style="font-size:13px;color:var(--text-2)">${esc(admin.name)}</span>
+    ${roleTag(admin.role)}
     <a href="/dashboard" class="btn btn-secondary btn-sm">לדשבורד</a>
     <a href="/logout" class="btn btn-ghost btn-sm">התנתק</a>
   </div>
@@ -184,10 +197,13 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
     <div class="stat"><div class="stat-val" style="color:${net >= 0 ? '#2e7d32' : '#D32F2F'}" dir="ltr">${ils(net)}</div><div class="stat-lbl">מאזן כולל</div></div>
   </div>
 
+  ${notice ? `<div style="background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:16px">${esc(notice)}</div>` : ''}
+
   <div class="tabs">
     <a href="/admin?tab=clients" class="tab ${tab === 'clients' ? 'on' : ''}">לקוחות (${clients.length})</a>
     <a href="/admin?tab=tasks"   class="tab ${tab === 'tasks'   ? 'on' : ''}">משימות (${stats.open_tasks})</a>
-    <a href="/admin?tab=money"   class="tab ${tab === 'money'   ? 'on' : ''}">כספים</a>
+    ${isOwner ? `<a href="/admin?tab=money" class="tab ${tab === 'money' ? 'on' : ''}">כספים</a>` : ''}
+    ${isOwner ? `<a href="/admin?tab=roles" class="tab ${tab === 'roles' ? 'on' : ''}">הרשאות (${accounts.length})</a>` : ''}
   </div>
 
   <!-- ── clients ── -->
@@ -241,7 +257,8 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
     </div>
   </div>
 
-  <!-- ── money ── -->
+  <!-- ── money — owner only ── -->
+  ${!isOwner ? '' : `
   <div ${tab === 'money' ? '' : 'hidden'}>
     <div class="panel">
       <div class="sec-label">תנועה חדשה</div>
@@ -273,6 +290,43 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
       </table>
     </div>
   </div>
+
+  <!-- ── roles — owner only ── -->
+  <div ${tab === 'roles' ? '' : 'hidden'}>
+    <div class="panel" style="background:var(--bg-2)">
+      <div class="sec-label" style="margin-bottom:6px">שלוש רמות הרשאה</div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.7">
+        <b style="color:var(--text)">מנהל על</b> — אזור הניהול המלא, כספים, ומינוי הרשאות. זה אתה.<br/>
+        <b style="color:var(--text)">מנהל</b> — לקוחות ומשימות בלבד. לא רואה כספים ולא יכול לשנות הרשאות.<br/>
+        <b style="color:var(--text)">לקוח</b> — רק הדשבורד של העסק שלו. אזור הניהול לא קיים מבחינתו.
+      </div>
+    </div>
+
+    <div class="sec-label">כל החשבונות (${accounts.length})</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>חשבון</th><th>אימייל</th><th>הרשאה</th><th>כרטיסים</th><th>נרשם</th><th>שנה ל…</th></tr></thead>
+        <tbody>
+          ${accounts.map(a => `
+          <tr${a.id === admin.id ? ' style="background:var(--bg-2)"' : ''}>
+            <td style="font-weight:600">${esc(a.name)}${a.id === admin.id ? ' <span style="font-size:11px;color:var(--text-2);font-weight:400">(אתה)</span>' : ''}</td>
+            <td dir="ltr" style="font-size:13px;color:var(--text-2)">${esc(a.email)}</td>
+            <td>${roleTag(a.role)}</td>
+            <td style="font-size:13px">${a.card_holders}</td>
+            <td style="font-size:13px;color:var(--text-2)">${day(a.created_at)}</td>
+            <td>
+              <form method="POST" action="/admin/roles/${esc(a.id)}" style="display:flex;gap:6px;align-items:center">
+                <select name="role" style="width:120px;height:32px">
+                  ${['owner','admin','client'].map(r => `<option value="${r}"${r === a.role ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+                </select>
+                <button class="btn btn-secondary btn-sm">שמור</button>
+              </form>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`}
 
 </div>
 </body></html>`;

@@ -138,3 +138,42 @@ module.exports = {
   listFinance, createEntry, deleteEntry,
   stats,
 };
+
+// ── roles (owner only) ────────────────────────────────
+const ROLES = ['owner', 'admin', 'client'];
+
+async function listAccounts() {
+  const { rows } = await q(`
+    select b.id, b.name, b.email, b.role, b.created_at,
+           (select count(*) from customers cu where cu.biz_id = b.id)::int as card_holders
+      from businesses b
+     order by case b.role when 'owner' then 0 when 'admin' then 1 else 2 end, b.created_at`);
+  return rows;
+}
+
+async function countOwners() {
+  const { rows } = await q("select count(*)::int n from businesses where role = 'owner'");
+  return rows[0].n;
+}
+
+// Refuses to remove the last owner, so the platform can never be locked out of
+// its own admin area.
+async function setRole(bizId, role) {
+  if (!ROLES.includes(role)) return { ok: false, reason: 'bad-role' };
+
+  const { rows } = await q('select role from businesses where id = $1', [bizId]);
+  if (!rows[0]) return { ok: false, reason: 'not-found' };
+  if (rows[0].role === role) return { ok: true, changed: false };
+
+  if (rows[0].role === 'owner' && await countOwners() <= 1) {
+    return { ok: false, reason: 'last-owner' };
+  }
+
+  await q('update businesses set role = $2 where id = $1', [bizId, role]);
+  return { ok: true, changed: true };
+}
+
+module.exports.ROLES = ROLES;
+module.exports.listAccounts = listAccounts;
+module.exports.countOwners = countOwners;
+module.exports.setRole = setRole;
