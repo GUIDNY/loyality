@@ -38,18 +38,19 @@ function ownerOnly(req, res, next) {
 router.get('/admin', staffOnly, async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
-    let tab = ['clients', 'tasks', 'money', 'roles'].includes(req.query.tab) ? req.query.tab : 'clients';
+    let tab = ['clients', 'tasks', 'ideas', 'money', 'roles'].includes(req.query.tab) ? req.query.tab : 'clients';
     // an admin has no money or roles tab to land on
     if (!biz_isOwner(req) && (tab === 'money' || tab === 'roles')) tab = 'clients';
     const owner = biz_isOwner(req);
-    const [stats, clients, tasks, finance, unlinked, accounts] = await Promise.all([
-      crm.stats(), crm.listClients(), crm.listTasks(),
+    const [stats, clients, tasks, ideas, finance, unlinked, accounts, split] = await Promise.all([
+      crm.stats(), crm.listClients(), crm.listTasks(), crm.listIdeas(),
       owner ? crm.listFinance()  : [],
       crm.unlinkedBusinesses(),
       owner ? crm.listAccounts() : [],
+      owner ? crm.partnerSplit() : { partners: [], unattributed: 0 },
     ]);
-    res.send(adminPage({ admin: req.admin, stats, clients, tasks, finance, unlinked, accounts, tab,
-                         notice: req.query.notice || '' }));
+    res.send(adminPage({ admin: req.admin, stats, clients, tasks, ideas, finance, unlinked,
+                         accounts, split, tab, notice: req.query.notice || '' }));
   } catch (e) { next(e); }
 });
 
@@ -66,6 +67,7 @@ router.post('/admin/clients', staffOnly, async (req, res, next) => {
       status:  req.body.status,
       notes:   sanitize(req.body.notes   || '', 500),
       bizId:   sanitize(req.body.bizId   || '', 20) || null,
+      addedBy: req.admin.id,
     });
     res.redirect('/admin?tab=clients');
   } catch (e) { next(e); }
@@ -88,6 +90,7 @@ router.post('/admin/tasks', staffOnly, async (req, res, next) => {
       notes:    sanitize(req.body.notes || '', 500),
       dueOn:    req.body.dueOn || null,
       clientId: req.body.clientId || null,
+      addedBy:  req.admin.id,
     });
     res.redirect('/admin?tab=tasks');
   } catch (e) { next(e); }
@@ -107,6 +110,32 @@ router.post('/admin/tasks/:id/delete', staffOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── ideas ─────────────────────────────────────────────
+// The shared scratchpad: both partners write here, and every entry keeps its
+// author so you can see who thought of what.
+router.post('/admin/ideas', staffOnly, async (req, res, next) => {
+  try {
+    const title = sanitize(req.body.title || '', 200);
+    if (!title) return res.redirect('/admin?tab=ideas');
+    await crm.createIdea({ title, body: sanitize(req.body.body || '', 2000), authorId: req.admin.id });
+    res.redirect('/admin?tab=ideas');
+  } catch (e) { next(e); }
+});
+
+router.post('/admin/ideas/:id/status', staffOnly, async (req, res, next) => {
+  try {
+    await crm.setIdeaStatus(req.params.id, req.body.status);
+    res.redirect('/admin?tab=ideas');
+  } catch (e) { next(e); }
+});
+
+router.post('/admin/ideas/:id/delete', staffOnly, async (req, res, next) => {
+  try {
+    await crm.deleteIdea(req.params.id);
+    res.redirect('/admin?tab=ideas');
+  } catch (e) { next(e); }
+});
+
 // ── money ─────────────────────────────────────────────
 router.post('/admin/finance', staffOnly, ownerOnly, async (req, res, next) => {
   try {
@@ -119,6 +148,7 @@ router.post('/admin/finance', staffOnly, ownerOnly, async (req, res, next) => {
       note:       sanitize(req.body.note     || '', 500),
       occurredOn: req.body.occurredOn || null,
       clientId:   req.body.clientId || null,
+      addedBy:    req.admin.id,
     });
     res.redirect('/admin?tab=money');
   } catch (e) { next(e); }

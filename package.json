@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/e2e.js && node test/admin.js"
+    "test": "node test/e2e.js && node test/admin.js && node test/partners.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

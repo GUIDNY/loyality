@@ -45,7 +45,16 @@ function roleTag(r) {
   return `<span class="tag" style="${ROLE_STYLE[r] || ROLE_STYLE.client}">${ROLE_LABEL[r] || r}</span>`;
 }
 
-function adminPage({ admin, stats, clients, tasks, finance, unlinked, accounts = [], tab = 'clients', notice = '' }) {
+const IDEA_LABEL = { new: 'חדש', doing: 'בעבודה', done: 'בוצע', dropped: 'נזנח' };
+const IDEA_STYLE = {
+  new:     'background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca',
+  doing:   'background:#fff7ed;border:1px solid #fed7aa;color:#c2410c',
+  done:    'background:#e8f5e9;border:1px solid #a5d6a7;color:#2e7d32',
+  dropped: 'background:var(--bg-2);border:1px solid var(--border);color:var(--text-2)',
+};
+const who = n => n ? `<span style="font-size:12px;color:var(--text-2)">${esc(n)}</span>` : '<span style="color:#bbb;font-size:12px">—</span>';
+
+function adminPage({ admin, stats, clients, tasks, ideas = [], finance, unlinked, accounts = [], split = { partners: [], unattributed: 0 }, tab = 'clients', notice = '' }) {
   const isOwner = admin.isOwner === true;
   const net = Number(stats.income) - Number(stats.expense);
   const netMonth = Number(stats.income_month) - Number(stats.expense_month);
@@ -60,6 +69,7 @@ function adminPage({ admin, stats, clients, tasks, finance, unlinked, accounts =
       <td style="font-size:13px;color:var(--text-2)" dir="ltr">${esc(c.email || c.biz_email || '')}</td>
       <td>${c.biz_id ? `<span class="tag" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text-2)">${esc(c.biz_id)}</span>` : '<span style="color:#bbb;font-size:12px">לא מקושר</span>'}</td>
       <td style="font-size:13px">${c.biz_id ? `${c.card_holders} כרטיסים · ${c.punches} ניקובים` : '—'}</td>
+      <td>${who(c.added_by_name)}</td>
       <td style="font-size:13px;color:var(--text-2);max-width:220px">${esc(c.notes || '')}</td>
       <td>
         <form method="POST" action="/admin/clients/${c.id}/delete" onsubmit="return confirm('למחוק את ${esc(c.name)}? המשימות והתנועות שלו יישארו, בלי שיוך.')">
@@ -110,6 +120,7 @@ function adminPage({ admin, stats, clients, tasks, finance, unlinked, accounts =
       </td>
       <td style="font-size:13px">${t.client_name ? esc(t.client_name) : '<span style="color:#bbb">—</span>'}</td>
       <td style="font-size:13px;${overdue ? 'color:#D32F2F;font-weight:700' : 'color:var(--text-2)'}">${t.due_on ? day(t.due_on) + (overdue ? ' ⚠' : '') : '—'}</td>
+      <td>${who(t.added_by_name)}</td>
       <td>
         <form method="POST" action="/admin/tasks/${t.id}/delete" onsubmit="return confirm('למחוק את המשימה?')">
           <button class="btn btn-danger btn-sm">מחק</button>
@@ -127,6 +138,7 @@ function adminPage({ admin, stats, clients, tasks, finance, unlinked, accounts =
       <td style="font-weight:700;${f.kind === 'income' ? 'color:#2e7d32' : 'color:#D32F2F'}" dir="ltr">${f.kind === 'income' ? '+' : '−'}${ils(f.amount)}</td>
       <td style="font-size:13px">${esc(f.category || '')}</td>
       <td style="font-size:13px">${f.client_name ? esc(f.client_name) : '<span style="color:#bbb">—</span>'}</td>
+      <td>${who(f.credited_to)}</td>
       <td style="font-size:13px;color:var(--text-2);max-width:240px">${esc(f.note || '')}</td>
       <td>
         <form method="POST" action="/admin/finance/${f.id}/delete" onsubmit="return confirm('למחוק את התנועה?')">
@@ -202,6 +214,7 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
   <div class="tabs">
     <a href="/admin?tab=clients" class="tab ${tab === 'clients' ? 'on' : ''}">לקוחות (${clients.length})</a>
     <a href="/admin?tab=tasks"   class="tab ${tab === 'tasks'   ? 'on' : ''}">משימות (${stats.open_tasks})</a>
+    <a href="/admin?tab=ideas" class="tab ${tab === 'ideas' ? 'on' : ''}">רעיונות (${ideas.filter(i => i.status === 'new' || i.status === 'doing').length})</a>
     ${isOwner ? `<a href="/admin?tab=money" class="tab ${tab === 'money' ? 'on' : ''}">כספים</a>` : ''}
     ${isOwner ? `<a href="/admin?tab=roles" class="tab ${tab === 'roles' ? 'on' : ''}">הרשאות (${accounts.length})</a>` : ''}
   </div>
@@ -226,7 +239,7 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
     <div class="sec-label">לקוחות (${clients.length})</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>לקוח</th><th>סטטוס</th><th>אימייל</th><th>חשבון</th><th>פעילות</th><th>הערות</th><th></th></tr></thead>
+        <thead><tr><th>לקוח</th><th>סטטוס</th><th>אימייל</th><th>חשבון</th><th>פעילות</th><th>מי הוסיף</th><th>הערות</th><th></th></tr></thead>
         <tbody>${clientRows}</tbody>
       </table>
     </div>
@@ -251,8 +264,53 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
     <div class="sec-label">משימות (${tasks.filter(t => !t.done).length} פתוחות מתוך ${tasks.length})</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th></th><th>משימה</th><th>לקוח</th><th>יעד</th><th></th></tr></thead>
+        <thead><tr><th></th><th>משימה</th><th>לקוח</th><th>יעד</th><th>מי הוסיף</th><th></th></tr></thead>
         <tbody>${taskRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ideas — both partners ── -->
+  <div ${tab === 'ideas' ? '' : 'hidden'}>
+    <div class="panel">
+      <div class="sec-label">רעיון חדש</div>
+      <form method="POST" action="/admin/ideas">
+        <div class="grid" style="grid-template-columns:2fr 3fr auto">
+          <label><span>הרעיון *</span><input name="title" required placeholder="מועדון לקוחות לרשתות"/></label>
+          <label><span>פירוט</span><input name="body" placeholder="איך זה עובד, למי זה מתאים..."/></label>
+          <label><span>&nbsp;</span><button class="btn btn-primary" style="height:38px;justify-content:center">הוסף</button></label>
+        </div>
+      </form>
+    </div>
+
+    <div class="sec-label">רעיונות (${ideas.length})</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>רעיון</th><th>מי כתב</th><th>מתי</th><th>סטטוס</th><th></th></tr></thead>
+        <tbody>
+          ${ideas.length ? ideas.map(i => `
+          <tr style="${i.status === 'done' || i.status === 'dropped' ? 'opacity:.55' : ''}">
+            <td>
+              <div style="font-weight:600">${esc(i.title)}</div>
+              ${i.body ? `<div style="font-size:12px;color:var(--text-2);margin-top:2px">${esc(i.body)}</div>` : ''}
+            </td>
+            <td>${who(i.author_name)}</td>
+            <td style="font-size:13px;color:var(--text-2)">${day(i.created_at)}</td>
+            <td>
+              <form method="POST" action="/admin/ideas/${i.id}/status" style="display:flex;gap:6px;align-items:center">
+                <select name="status" style="width:110px;height:32px">
+                  ${['new','doing','done','dropped'].map(v => `<option value="${v}"${v === i.status ? ' selected' : ''}>${IDEA_LABEL[v]}</option>`).join('')}
+                </select>
+                <button class="btn btn-secondary btn-sm">שמור</button>
+              </form>
+            </td>
+            <td>
+              <form method="POST" action="/admin/ideas/${i.id}/delete" onsubmit="return confirm('למחוק את הרעיון?')">
+                <button class="btn btn-danger btn-sm">מחק</button>
+              </form>
+            </td>
+          </tr>`).join('') : empty('אין רעיונות עדיין — כתוב את הראשון למעלה.')}
+        </tbody>
       </table>
     </div>
   </div>
@@ -275,6 +333,34 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
       </form>
     </div>
 
+    <div class="sec-label">חלוקה בין השותפים</div>
+    <div class="panel" style="margin-bottom:20px">
+      <div class="tbl-wrap" style="border:none">
+        <table style="min-width:480px">
+          <thead><tr><th>שותף</th><th>לקוחות שהביא</th><th>רעיונות</th><th>משימות פתוחות</th><th>הכנסות שנזקפו לו</th></tr></thead>
+          <tbody>
+            ${split.partners.length ? split.partners.map(p => `
+            <tr${p.id === admin.id ? ' style="background:var(--bg-2)"' : ''}>
+              <td style="font-weight:700">${esc(p.name)}${p.id === admin.id ? ' <span style="font-size:11px;color:var(--text-2);font-weight:400">(אתה)</span>' : ''}</td>
+              <td>${p.clients_added}</td>
+              <td>${p.ideas}</td>
+              <td>${p.open_tasks}</td>
+              <td style="font-weight:800;color:#2e7d32" dir="ltr">${ils(p.income)}</td>
+            </tr>`).join('') : empty('אין עדיין שותפים — מנה מישהו כמנהל או מנהל על בלשונית ההרשאות.')}
+            ${Number(split.unattributed) > 0 ? `
+            <tr>
+              <td style="color:var(--text-2)">לא משויך</td>
+              <td colspan="3" style="font-size:12px;color:var(--text-2)">הכנסות בלי לקוח, או מלקוח שלא רשום מי הביא אותו</td>
+              <td style="font-weight:800;color:var(--text-2)" dir="ltr">${ils(split.unattributed)}</td>
+            </tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:12px;line-height:1.6">
+        הכנסה נזקפת למי שהוסיף את הלקוח שאליו היא מקושרת. הוצאות לא מחולקות כאן — הן מוצגות בנפרד, כי אין דרך לדעת איך אתם מחלקים אותן ביניכם.
+      </div>
+    </div>
+
     <div class="grid g4" style="margin-bottom:18px">
       <div class="stat"><div class="stat-val" style="color:#2e7d32" dir="ltr">${ils(stats.income_month)}</div><div class="stat-lbl">הכנסות החודש</div></div>
       <div class="stat"><div class="stat-val" style="color:#D32F2F" dir="ltr">${ils(stats.expense_month)}</div><div class="stat-lbl">הוצאות החודש</div></div>
@@ -285,7 +371,7 @@ label span{display:block;font-size:11px;font-weight:600;color:var(--text-2);marg
     <div class="sec-label">תנועות אחרונות</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>תאריך</th><th>סוג</th><th>סכום</th><th>קטגוריה</th><th>לקוח</th><th>הערה</th><th></th></tr></thead>
+        <thead><tr><th>תאריך</th><th>סוג</th><th>סכום</th><th>קטגוריה</th><th>לקוח</th><th>נזקף ל</th><th>הערה</th><th></th></tr></thead>
         <tbody>${finRows}</tbody>
       </table>
     </div>

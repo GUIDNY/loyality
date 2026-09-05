@@ -13,10 +13,12 @@ async function listClients() {
     select c.*,
            b.name  as biz_name,
            b.email as biz_email,
+           a.name  as added_by_name,
            (select count(*) from customers cu where cu.biz_id = c.biz_id)::int as card_holders,
            (select coalesce(sum(cu.punches), 0) from customers cu where cu.biz_id = c.biz_id)::int as punches
       from admin_clients c
       left join businesses b on b.id = c.biz_id
+      left join businesses a on a.id = c.added_by
      order by case c.status when 'active' then 0 when 'lead' then 1 when 'paused' then 2 else 3 end,
               c.created_at desc`);
   return rows;
@@ -24,10 +26,10 @@ async function listClients() {
 
 async function createClient(d) {
   const { rows } = await q(
-    `insert into admin_clients (name, contact, phone, email, status, notes, biz_id)
-     values ($1,$2,$3,$4,$5,$6,$7) returning *`,
+    `insert into admin_clients (name, contact, phone, email, status, notes, biz_id, added_by)
+     values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
     [d.name, d.contact || '', d.phone || '', d.email || '',
-     STATUSES.includes(d.status) ? d.status : 'lead', d.notes || '', d.bizId || null]
+     STATUSES.includes(d.status) ? d.status : 'lead', d.notes || '', d.bizId || null, d.addedBy || null]
   );
   return rows[0];
 }
@@ -61,18 +63,19 @@ async function unlinkedBusinesses() {
 // ── tasks ─────────────────────────────────────────────
 async function listTasks() {
   const { rows } = await q(`
-    select t.*, c.name as client_name
+    select t.*, c.name as client_name, a.name as added_by_name
       from admin_tasks t
       left join admin_clients c on c.id = t.client_id
+      left join businesses a on a.id = t.added_by
      order by t.done asc, t.due_on asc nulls last, t.created_at desc`);
   return rows;
 }
 
 async function createTask(d) {
   const { rows } = await q(
-    `insert into admin_tasks (title, notes, due_on, client_id)
-     values ($1,$2,$3,$4) returning *`,
-    [d.title, d.notes || '', d.dueOn || null, d.clientId || null]
+    `insert into admin_tasks (title, notes, due_on, client_id, added_by)
+     values ($1,$2,$3,$4,$5) returning *`,
+    [d.title, d.notes || '', d.dueOn || null, d.clientId || null, d.addedBy || null]
   );
   return rows[0];
 }
@@ -89,9 +92,12 @@ async function deleteTask(id) {
 // ── money ─────────────────────────────────────────────
 async function listFinance(limit = 100) {
   const { rows } = await q(`
-    select f.*, c.name as client_name
+    select f.*, c.name as client_name,
+           coalesce(owner.name, a.name) as credited_to
       from admin_finance f
       left join admin_clients c on c.id = f.client_id
+      left join businesses owner on owner.id = c.added_by
+      left join businesses a on a.id = f.added_by
      order by f.occurred_on desc, f.id desc
      limit $1`, [limit]);
   return rows;
@@ -99,10 +105,10 @@ async function listFinance(limit = 100) {
 
 async function createEntry(d) {
   const { rows } = await q(
-    `insert into admin_finance (kind, amount, category, note, occurred_on, client_id)
-     values ($1,$2,$3,$4,coalesce($5, current_date),$6) returning *`,
+    `insert into admin_finance (kind, amount, category, note, occurred_on, client_id, added_by)
+     values ($1,$2,$3,$4,coalesce($5, current_date),$6,$7) returning *`,
     [d.kind === 'expense' ? 'expense' : 'income', d.amount, d.category || '',
-     d.note || '', d.occurredOn || null, d.clientId || null]
+     d.note || '', d.occurredOn || null, d.clientId || null, d.addedBy || null]
   );
   return rows[0];
 }
@@ -177,3 +183,73 @@ module.exports.ROLES = ROLES;
 module.exports.listAccounts = listAccounts;
 module.exports.countOwners = countOwners;
 module.exports.setRole = setRole;
+
+// ── ideas ─────────────────────────────────────────────
+const IDEA_STATUSES = ['new', 'doing', 'done', 'dropped'];
+
+async function listIdeas() {
+  const { rows } = await q(`
+    select i.*, b.name as author_name
+      from admin_ideas i
+      left join businesses b on b.id = i.author_id
+     order by case i.status when 'doing' then 0 when 'new' then 1 when 'done' then 2 else 3 end,
+              i.created_at desc`);
+  return rows;
+}
+
+async function createIdea(d) {
+  const { rows } = await q(
+    `insert into admin_ideas (title, body, author_id) values ($1,$2,$3) returning *`,
+    [d.title, d.body || '', d.authorId || null]
+  );
+  return rows[0];
+}
+
+async function setIdeaStatus(id, status) {
+  if (!IDEA_STATUSES.includes(status)) return null;
+  const { rows } = await q('update admin_ideas set status = $2 where id = $1 returning *', [id, status]);
+  return rows[0];
+}
+
+async function deleteIdea(id) {
+  await q('delete from admin_ideas where id = $1', [id]);
+}
+
+// ── partner split ─────────────────────────────────────
+// Income is credited to whoever added the client it is attached to. Income with
+// no client — or attached to a client nobody is recorded as having added — is
+// left unattributed rather than guessed at. Expenses are shown separately
+// because they are shared and this does not presume how you divide them.
+async function partnerSplit() {
+  const { rows } = await q(`
+    with staff as (
+      select id, name from businesses where role in ('owner','admin')
+    )
+    select s.id, s.name,
+           (select count(*) from admin_clients c where c.added_by = s.id)::int as clients_added,
+           (select count(*) from admin_ideas  i where i.author_id = s.id)::int as ideas,
+           (select count(*) from admin_tasks  t where t.added_by = s.id and not t.done)::int as open_tasks,
+           coalesce((
+             select sum(f.amount) from admin_finance f
+               join admin_clients c on c.id = f.client_id
+              where f.kind = 'income' and c.added_by = s.id
+           ), 0)::numeric as income
+      from staff s
+     order by income desc, s.name`);
+
+  const { rows: un } = await q(`
+    select coalesce(sum(f.amount), 0)::numeric as amount
+      from admin_finance f
+      left join admin_clients c on c.id = f.client_id
+     where f.kind = 'income'
+       and (f.client_id is null or c.added_by is null)`);
+
+  return { partners: rows, unattributed: Number(un[0].amount) };
+}
+
+module.exports.IDEA_STATUSES = IDEA_STATUSES;
+module.exports.listIdeas = listIdeas;
+module.exports.createIdea = createIdea;
+module.exports.setIdeaStatus = setIdeaStatus;
+module.exports.deleteIdea = deleteIdea;
+module.exports.partnerSplit = partnerSplit;
